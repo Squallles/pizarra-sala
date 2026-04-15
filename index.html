@@ -360,17 +360,7 @@ body{font-family:system-ui,sans-serif;font-size:14px;color:#1a1a1a;background:#d
         </select>
       </div>
     </div>
-    <div class="form-group"><label>Situacion</label>
-      <select id="nota-sit">
-        <option value="">Sin Contactar</option>
-        <option value="INSTALACIÓN">INSTALACION</option>
-        <option value="EN RUTA">EN RUTA</option>
-        <option value="RUTA MAÑANA">RUTA MAÑANA</option>
-        <option value="NULO">NULO</option>
-        <option value="NULO RUTA">NULO RUTA</option>
-        <option value="BAJA">BAJA</option>
-      </select>
-    </div>
+    <input type="hidden" id="nota-sit" value="">
     <div class="modal-actions">
       <button class="btn" onclick="closeModal()">Cancelar</button>
       <button class="btn btn-primary" onclick="saveNota()">Guardar</button>
