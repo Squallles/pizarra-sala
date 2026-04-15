@@ -218,6 +218,41 @@ def api_nota_update(nota_id):
             conn.commit()
     return jsonify({'ok': True})
 
+@app.route('/api/notas/bulk', methods=['POST'])
+@login_required
+def api_notas_bulk():
+    """Carga masiva de notas. Solo admin."""
+    if not session.get('is_admin'):
+        return jsonify({'error': 'Solo admin'}), 403
+    notas = request.json.get('notas', [])
+    if not notas:
+        return jsonify({'error': 'Sin notas'}), 400
+    inserted = 0
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            values = []
+            for n in notas:
+                mes = n.get('mes', '').strip()
+                tp = n.get('tp_code', '').strip()
+                fecha = n.get('fecha', '').strip()
+                tel = n.get('telefono', '').strip()
+                if not mes or not tp or not fecha or not tel:
+                    continue
+                values.append((
+                    mes, tp, fecha, tel,
+                    n.get('localidad', '').strip(),
+                    n.get('provincia', '').strip(),
+                    n.get('zona', 'resto').strip(),
+                    n.get('situacion', '').strip()
+                ))
+            if values:
+                execute_values(cur,
+                    'INSERT INTO notas (mes, tp_code, fecha, telefono, localidad, provincia, zona, situacion) VALUES %s',
+                    values)
+                inserted = len(values)
+        conn.commit()
+    return jsonify({'ok': True, 'inserted': inserted})
+
 @app.route('/api/notas/<int:nota_id>', methods=['DELETE'])
 @login_required
 def api_nota_delete(nota_id):
