@@ -218,6 +218,26 @@ def api_nota_update(nota_id):
             conn.commit()
     return jsonify({'ok': True})
 
+@app.route('/api/notas/reset', methods=['POST'])
+@login_required
+def api_notas_reset():
+    """Borra todas las notas de un mes. Solo admin."""
+    if not session.get('is_admin'):
+        return jsonify({'error': 'Solo admin'}), 403
+    mes = request.json.get('mes', '')
+    if not mes:
+        # Borrar todo
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute('DELETE FROM notas')
+            conn.commit()
+        return jsonify({'ok': True, 'msg': 'Todo borrado'})
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute('DELETE FROM notas WHERE mes=%s', (mes,))
+        conn.commit()
+    return jsonify({'ok': True})
+
 @app.route('/api/notas/bulk', methods=['POST'])
 @login_required
 def api_notas_bulk():
