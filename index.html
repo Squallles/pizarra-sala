@@ -558,15 +558,30 @@ function summaryRowFull(r, pos) {
 function renderSummaryTP(data) {
   const body = document.getElementById('summary-body-tp');
   const myCode = currentUser.code;
+
+  // Calcular stats propias desde tpAllNotas (mes actual)
+  const mesNotas = tpAllNotas.filter(n => n.tp_code === myCode && n.mes === currentMes);
+  const myStats = {ventas:0, resto:0, madrid:0, notas:mesNotas.length, nulos:0, nulos_ruta:0, pend:0, bajas:0, en_ruta:0};
+  mesNotas.forEach(n => {
+    const sit = (n.situacion||'').toUpperCase().trim();
+    if (n.zona==='resto') myStats.resto++;
+    if (n.zona==='madrid') myStats.madrid++;
+    if (sit==='INSTALACIÓN'||sit==='INSTALACION') myStats.ventas++;
+    else if (sit==='NULO') myStats.nulos++;
+    else if (sit==='NULO RUTA') myStats.nulos_ruta++;
+    else if (sit==='BAJA') myStats.bajas++;
+    else if (sit==='EN RUTA'||sit==='RUTA MAÑANA') myStats.en_ruta++;
+    else myStats.pend++;
+  });
+
   let html = '';
+  // Usar data.resumen para el resto pero stats propias calculadas
   data.resumen.forEach((r, i) => {
-    if (r.notas === 0) return;
+    if (r.notas === 0 && r.code !== myCode) return;
     const isSelf = r.code === myCode;
     if (isSelf) {
-      // Fila completa para la propia TP
-      html += summaryRowFull(r, i+1);
+      html += summaryRowFull({...r, ...myStats, code: r.code, name: r.name}, i+1);
     } else {
-      // Solo nombre y ventas para el resto
       html += `<tr>
         <td>${i+1}</td>
         <td>${r.name}</td>
@@ -697,6 +712,9 @@ function filterTPNotas() {
     if (hasta && n.fecha > hasta) return false;
     return true;
   });
+
+  // Ordenar de más antiguo a más nuevo
+  notas.sort((a, b) => (a.fecha||'').localeCompare(b.fecha||'') || (a.created_at||'').localeCompare(b.created_at||''));
 
   const ventas = notas.filter(n => {const s=(n.situacion||'').toUpperCase(); return s==='INSTALACIÓN'||s==='INSTALACION';}).length;
   document.getElementById('tp-ventas-count').textContent = ventas + ' ventas · ' + notas.length + ' notas';
