@@ -573,11 +573,14 @@ function renderSummaryTP(data) {
   const myVentas = mesNotas.filter(n => {const s=(n.situacion||'').toUpperCase().trim(); return s==='INSTALACIÓN'||s==='INSTALACION';}).length;
 
   let html = '';
-  data.resumen.forEach((r, i) => {
+  let pos = 0;
+  data.resumen.forEach((r) => {
     const isSelf = r.code === myCode;
     const ventas = isSelf ? myVentas : r.ventas;
+    if (!ventas && !isSelf) return;
+    pos++;
     html += `<tr style="${isSelf?'background:#E6F1FB':''}">
-      <td>${i+1}</td>
+      <td>${pos}</td>
       <td style="${isSelf?'font-weight:800':''}">${r.name}</td>
       <td class="v-ventas">${ventas||'<span class="v-muted">—</span>'}</td>
     </tr>`;
