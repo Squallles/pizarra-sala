@@ -428,6 +428,22 @@ def api_meses():
         meses.insert(0, current)
     return jsonify(meses)
 
+# ── LIMPIAR DUPLICADOS ────────────────────────────────────────────────────────
+@app.route('/api/notas/clean-duplicates', methods=['POST'])
+@login_required
+def api_clean_duplicates():
+    if not session.get('is_admin'):
+        return jsonify({'error': 'Solo admin'}), 403
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute('''DELETE FROM notas WHERE id NOT IN (
+                SELECT MIN(id) FROM notas
+                GROUP BY tp_code, fecha, telefono
+            )''')
+            deleted = cur.rowcount
+        conn.commit()
+    return jsonify({'ok': True, 'deleted': deleted})
+
 # ── RANKING DÍA ──────────────────────────────────────────────────────────────
 @app.route('/api/ranking-dia')
 @login_required
