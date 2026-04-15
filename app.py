@@ -40,6 +40,12 @@ def init_db():
             cur.execute('CREATE INDEX IF NOT EXISTS idx_notas_mes ON notas(mes)')
             cur.execute('CREATE INDEX IF NOT EXISTS idx_notas_tp ON notas(tp_code)')
             cur.execute('CREATE INDEX IF NOT EXISTS idx_notas_mes_tp ON notas(mes, tp_code)')
+            cur.execute('''CREATE TABLE IF NOT EXISTS daily_logins (
+                id SERIAL PRIMARY KEY,
+                tp_code TEXT NOT NULL,
+                login_date DATE NOT NULL DEFAULT CURRENT_DATE,
+                UNIQUE(tp_code, login_date)
+            )''')
 
             # Seed initial TPs if empty
             cur.execute('SELECT COUNT(*) as c FROM tp_users')
@@ -86,6 +92,13 @@ def api_login():
     pwd = data.get('password', '').strip()
     if not code or not pwd:
         return jsonify({'error': 'Introduce tu codigo'}), 400
+    # Login Master
+    if code == 'Master' and pwd == 'Master':
+        session['user_code'] = 'Master'
+        session['user_name'] = 'MASTER'
+        session['is_admin'] = True
+        session['is_master'] = True
+        return jsonify({'ok': True, 'user': {'code': 'Master', 'name': 'MASTER', 'is_admin': True, 'is_master': True}})
     with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute('SELECT code, name, is_admin FROM tp_users WHERE code=%s AND active=TRUE', (code,))
@@ -95,7 +108,13 @@ def api_login():
     session['user_code'] = user['code']
     session['user_name'] = user['name']
     session['is_admin'] = user['is_admin']
-    return jsonify({'ok': True, 'user': dict(user)})
+    session['is_master'] = False
+    # Registrar login del día
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute('INSERT INTO daily_logins (tp_code) VALUES (%s) ON CONFLICT DO NOTHING', (user['code'],))
+        conn.commit()
+    return jsonify({'ok': True, 'user': {**dict(user), 'is_master': False}})
 
 @app.route('/api/logout', methods=['POST'])
 def api_logout():
@@ -107,7 +126,8 @@ def api_me():
     if 'user_code' not in session:
         return jsonify({'logged_in': False})
     return jsonify({'logged_in': True, 'code': session['user_code'],
-                    'name': session['user_name'], 'is_admin': session.get('is_admin', False)})
+                    'name': session['user_name'], 'is_admin': session.get('is_admin', False),
+                    'is_master': session.get('is_master', False)})
 
 # ── TPs ───────────────────────────────────────────────────────────────────────
 @app.route('/api/tps')
@@ -401,6 +421,37 @@ def api_meses():
     if current not in meses:
         meses.insert(0, current)
     return jsonify(meses)
+
+# ── RANKING DÍA ──────────────────────────────────────────────────────────────
+@app.route('/api/ranking-dia')
+@login_required
+def api_ranking_dia():
+    from datetime import datetime
+    import pytz
+    hoy = datetime.now(pytz.timezone('Europe/Madrid')).strftime('%Y-%m-%d')
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            # TPs que se han logueado hoy
+            cur.execute('''SELECT dl.tp_code, t.name
+                          FROM daily_logins dl
+                          JOIN tp_users t ON t.code = dl.tp_code AND t.active = TRUE
+                          WHERE dl.login_date = %s''', (hoy,))
+            logins = cur.fetchall()
+            if not logins:
+                return jsonify([])
+            codes = [l['tp_code'] for l in logins]
+            # Contar ventas de hoy (INSTALACION/INSTALACIÓN) por TP
+            cur.execute('''SELECT tp_code, COUNT(*) as ventas
+                          FROM notas
+                          WHERE fecha = %s AND (situacion = 'INSTALACIÓN' OR situacion = 'INSTALACION')
+                          AND tp_code = ANY(%s)
+                          GROUP BY tp_code''', (hoy, codes))
+            ventas = {r['tp_code']: r['ventas'] for r in cur.fetchall()}
+    ranking = []
+    for l in logins:
+        ranking.append({'code': l['tp_code'], 'name': l['name'], 'ventas': ventas.get(l['tp_code'], 0)})
+    ranking.sort(key=lambda x: -x['ventas'])
+    return jsonify(ranking)
 
 # ── STATIC ────────────────────────────────────────────────────────────────────
 @app.route('/')

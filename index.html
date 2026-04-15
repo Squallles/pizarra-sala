@@ -116,6 +116,24 @@ body{font-family:system-ui,sans-serif;font-size:14px;color:#1a1a1a;background:#d
 .btn-danger{color:#dc2626;border-color:#fca5a5}
 .btn-danger:hover{background:#fef2f2}
 
+/* Two-panel layout for TP view */
+.pizarra-panels{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+.pizarra-panels .summary-wrap{margin-bottom:0}
+.ranking-wrap{background:#fff;border:1px solid #B5D4F4;border-radius:10px;overflow:hidden}
+.ranking-header{background:#0C447C;padding:10px 14px;display:flex;justify-content:space-between;align-items:center}
+.ranking-header h3{color:#fff;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+.ranking-header .count{color:#85B7EB;font-size:11px}
+.ranking-table{width:100%;border-collapse:collapse}
+.ranking-table th{padding:8px 10px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#85B7EB;text-align:left;border-bottom:1px solid #E6F1FB;background:#f0f6ff}
+.ranking-table th:last-child{text-align:right}
+.ranking-table td{padding:8px 10px;border-bottom:1px solid #E6F1FB;font-size:12px}
+.ranking-table td:last-child{text-align:right;font-weight:700;color:#0C447C;font-size:14px}
+.ranking-table tr:hover{background:#f7fbff}
+.ranking-row-self{background:#E6F1FB !important}
+.ranking-pos{font-size:10px;font-weight:700;color:#85B7EB;width:24px;text-align:center}
+.ranking-name{font-weight:600;color:#0C447C}
+.ranking-empty{color:#85B7EB;font-size:12px;padding:20px;text-align:center}
+
 /* Provincias */
 .prov-wrap{background:#fff;border:1px solid #B5D4F4;border-radius:10px;overflow:hidden;margin-bottom:20px}
 .prov-header{background:#0C447C;padding:8px 14px}
@@ -190,14 +208,34 @@ body{font-family:system-ui,sans-serif;font-size:14px;color:#1a1a1a;background:#d
         <div><div class="page-title">Pizarra</div><div class="page-sub">Resumen y notas del mes</div></div>
       </div>
       <div class="month-pills" id="month-pills"></div>
-      <div class="summary-wrap">
+      <!-- Vista Master: tabla completa -->
+      <div id="summary-master" class="summary-wrap" style="display:none">
         <table class="summary-table">
           <thead><tr>
             <th>#</th><th>Teleoperadora</th><th>Ventas</th><th>Resto</th><th>Madrid</th>
             <th>Notas</th><th>Nulos</th><th>N.Ruta</th><th>Pend.</th><th>Bajas</th><th>En Ruta</th>
           </tr></thead>
-          <tbody id="summary-body"></tbody>
+          <tbody id="summary-body-master"></tbody>
         </table>
+      </div>
+      <!-- Vista TP: resumen reducido + ranking día -->
+      <div id="summary-tp" class="pizarra-panels" style="display:none">
+        <div class="summary-wrap">
+          <table class="summary-table">
+            <thead><tr>
+              <th>#</th><th>Teleoperadora</th><th>Ventas</th><th>Resto</th><th>Madrid</th>
+              <th>Notas</th><th>Nulos</th><th>N.Ruta</th><th>Pend.</th><th>Bajas</th><th>En Ruta</th>
+            </tr></thead>
+            <tbody id="summary-body-tp"></tbody>
+          </table>
+        </div>
+        <div class="ranking-wrap">
+          <div class="ranking-header">
+            <h3>Ventas del Dia</h3>
+            <span class="count" id="ranking-date"></span>
+          </div>
+          <div id="ranking-content"></div>
+        </div>
       </div>
       <div class="notas-grid">
         <div class="notas-section" id="section-resto">
@@ -411,25 +449,24 @@ async function loadMonth() {
 
 // ── SUMMARY ──
 function renderSummary(data) {
-  const body = document.getElementById('summary-body');
+  const isMaster = currentUser && currentUser.is_master;
+  document.getElementById('summary-master').style.display = isMaster ? '' : 'none';
+  document.getElementById('summary-tp').style.display = isMaster ? 'none' : '';
+
+  if (isMaster) {
+    renderSummaryFull(data, 'summary-body-master');
+  } else {
+    renderSummaryTP(data);
+    loadRanking();
+  }
+}
+
+function renderSummaryFull(data, bodyId) {
+  const body = document.getElementById(bodyId);
   let html = '';
   data.resumen.forEach((r, i) => {
-    if (r.notas === 0 && !currentUser.is_admin) return; // hide empty for non-admin
-    html += `<tr>
-      <td>${i+1}</td>
-      <td>${r.name}<br><span style="font-size:9px;color:#85B7EB;font-weight:400">${r.code}</span></td>
-      <td class="v-ventas">${r.ventas||'<span class="v-muted">—</span>'}</td>
-      <td>${r.resto||'<span class="v-muted">—</span>'}</td>
-      <td>${r.madrid||'<span class="v-muted">—</span>'}</td>
-      <td>${r.notas||'<span class="v-muted">—</span>'}</td>
-      <td class="${r.nulos?'v-nulos':''}">${r.nulos||'<span class="v-muted">—</span>'}</td>
-      <td class="${r.nulos_ruta?'v-nulos':''}">${r.nulos_ruta||'<span class="v-muted">—</span>'}</td>
-      <td class="${r.pend?'v-pend':''}">${r.pend||'<span class="v-muted">—</span>'}</td>
-      <td class="${r.bajas?'v-nulos':''}">${r.bajas||'<span class="v-muted">—</span>'}</td>
-      <td class="${r.en_ruta?'v-ruta':''}">${r.en_ruta||'<span class="v-muted">—</span>'}</td>
-    </tr>`;
+    html += summaryRowFull(r, i+1);
   });
-  // Totals row
   const t = data.totals;
   html += `<tr class="row-total">
     <td></td><td>TOTAL</td>
@@ -438,6 +475,75 @@ function renderSummary(data) {
     <td class="v-pend">${t.pend}</td><td class="v-nulos">${t.bajas}</td><td class="v-ruta">${t.en_ruta}</td>
   </tr>`;
   body.innerHTML = html;
+}
+
+function summaryRowFull(r, pos) {
+  return `<tr>
+    <td>${pos}</td>
+    <td>${r.name}<br><span style="font-size:9px;color:#85B7EB;font-weight:400">${r.code}</span></td>
+    <td class="v-ventas">${r.ventas||'<span class="v-muted">—</span>'}</td>
+    <td>${r.resto||'<span class="v-muted">—</span>'}</td>
+    <td>${r.madrid||'<span class="v-muted">—</span>'}</td>
+    <td>${r.notas||'<span class="v-muted">—</span>'}</td>
+    <td class="${r.nulos?'v-nulos':''}">${r.nulos||'<span class="v-muted">—</span>'}</td>
+    <td class="${r.nulos_ruta?'v-nulos':''}">${r.nulos_ruta||'<span class="v-muted">—</span>'}</td>
+    <td class="${r.pend?'v-pend':''}">${r.pend||'<span class="v-muted">—</span>'}</td>
+    <td class="${r.bajas?'v-nulos':''}">${r.bajas||'<span class="v-muted">—</span>'}</td>
+    <td class="${r.en_ruta?'v-ruta':''}">${r.en_ruta||'<span class="v-muted">—</span>'}</td>
+  </tr>`;
+}
+
+function renderSummaryTP(data) {
+  const body = document.getElementById('summary-body-tp');
+  const myCode = currentUser.code;
+  let html = '';
+  data.resumen.forEach((r, i) => {
+    if (r.notas === 0) return;
+    const isSelf = r.code === myCode;
+    if (isSelf) {
+      // Fila completa para la propia TP
+      html += summaryRowFull(r, i+1);
+    } else {
+      // Solo nombre y ventas para el resto
+      html += `<tr>
+        <td>${i+1}</td>
+        <td>${r.name}</td>
+        <td class="v-ventas">${r.ventas||'<span class="v-muted">—</span>'}</td>
+        <td><span class="v-muted">—</span></td><td><span class="v-muted">—</span></td>
+        <td><span class="v-muted">—</span></td><td><span class="v-muted">—</span></td>
+        <td><span class="v-muted">—</span></td><td><span class="v-muted">—</span></td>
+        <td><span class="v-muted">—</span></td><td><span class="v-muted">—</span></td>
+      </tr>`;
+    }
+  });
+  const t = data.totals;
+  html += `<tr class="row-total">
+    <td></td><td>TOTAL</td>
+    <td class="v-ventas">${t.ventas}</td><td colspan="8"></td>
+  </tr>`;
+  body.innerHTML = html;
+}
+
+async function loadRanking() {
+  try {
+    const r = await fetch('/api/ranking-dia', {credentials:'include'});
+    const data = await r.json();
+    const el = document.getElementById('ranking-content');
+    const today = new Date();
+    document.getElementById('ranking-date').textContent = today.toLocaleDateString('es-ES', {day:'numeric',month:'short'});
+    if (!data.length) { el.innerHTML = '<div class="ranking-empty">Nadie se ha logueado hoy</div>'; return; }
+    let html = '<table class="ranking-table"><thead><tr><th>#</th><th>Teleoperadora</th><th>Ventas</th></tr></thead><tbody>';
+    data.forEach((r, i) => {
+      const isSelf = currentUser && r.code === currentUser.code;
+      html += `<tr class="${isSelf?'ranking-row-self':''}">
+        <td class="ranking-pos">${i+1}</td>
+        <td class="ranking-name">${r.name}</td>
+        <td>${r.ventas}</td>
+      </tr>`;
+    });
+    html += '</tbody></table>';
+    el.innerHTML = html;
+  } catch(e) {}
 }
 
 // ── NOTAS ──
@@ -520,7 +626,7 @@ async function saveNota() {
     const r = await fetch('/api/notas', {method:'POST', credentials:'include',
       headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
     const d = await r.json();
-    if (d.ok) { closeModal(); loadMonth(); }
+    if (d.ok) { closeModal(); loadMonth(); if (!currentUser.is_master) loadRanking(); }
     else alert(d.error || 'Error');
   } catch(e) { alert('Error de conexion'); }
 }
