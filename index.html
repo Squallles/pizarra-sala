@@ -117,8 +117,9 @@ body{font-family:system-ui,sans-serif;font-size:14px;color:#1a1a1a;background:#d
 .btn-danger:hover{background:#fef2f2}
 
 /* Two-panel layout for TP view */
-.pizarra-panels{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
-.pizarra-panels .summary-wrap{margin-bottom:0}
+.pizarra-panels{display:grid;grid-template-columns:3fr 2fr;gap:16px;margin-bottom:20px}
+.pizarra-panels .summary-wrap{margin-bottom:0;min-width:0}
+.pizarra-panels .summary-table{min-width:0}
 .ranking-wrap{background:#fff;border:1px solid #B5D4F4;border-radius:10px;overflow:hidden}
 .ranking-header{background:#0C447C;padding:10px 14px;display:flex;justify-content:space-between;align-items:center}
 .ranking-header h3{color:#fff;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
@@ -126,8 +127,8 @@ body{font-family:system-ui,sans-serif;font-size:14px;color:#1a1a1a;background:#d
 .ranking-table{width:100%;border-collapse:collapse}
 .ranking-table th{padding:8px 10px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#85B7EB;text-align:left;border-bottom:1px solid #E6F1FB;background:#f0f6ff}
 .ranking-table th:last-child{text-align:right}
-.ranking-table td{padding:8px 10px;border-bottom:1px solid #E6F1FB;font-size:12px}
-.ranking-table td:last-child{text-align:right;font-weight:700;color:#0C447C;font-size:14px}
+.ranking-table td{padding:10px 12px;border-bottom:1px solid #E6F1FB;font-size:13px}
+.ranking-table td:last-child{text-align:right;font-weight:700;color:#0C447C;font-size:16px}
 .ranking-table tr:hover{background:#f7fbff}
 .ranking-row-self{background:#E6F1FB !important}
 .ranking-pos{font-size:10px;font-weight:700;color:#85B7EB;width:24px;text-align:center}
@@ -231,10 +232,9 @@ body{font-family:system-ui,sans-serif;font-size:14px;color:#1a1a1a;background:#d
       <!-- Vista TP: resumen reducido + ranking día -->
       <div id="summary-tp" class="pizarra-panels" style="display:none">
         <div class="summary-wrap">
-          <table class="summary-table">
+          <table class="summary-table" style="min-width:0">
             <thead><tr>
-              <th>#</th><th>Teleoperadora</th><th>Ventas</th><th>Resto</th><th>Madrid</th>
-              <th>Notas</th><th>Nulos</th><th>N.Ruta</th><th>Pend.</th><th>Bajas</th><th>En Ruta</th>
+              <th>#</th><th>Teleoperadora</th><th>Ventas</th>
             </tr></thead>
             <tbody id="summary-body-tp"></tbody>
           </table>
@@ -561,44 +561,25 @@ function renderSummaryTP(data) {
   const body = document.getElementById('summary-body-tp');
   const myCode = currentUser.code;
 
-  // Calcular stats propias desde tpAllNotas (mes actual)
+  // Calcular ventas propias desde tpAllNotas (mes actual)
   const mesNotas = tpAllNotas.filter(n => n.tp_code === myCode && n.mes === currentMes);
-  const myStats = {ventas:0, resto:0, madrid:0, notas:mesNotas.length, nulos:0, nulos_ruta:0, pend:0, bajas:0, en_ruta:0};
-  mesNotas.forEach(n => {
-    const sit = (n.situacion||'').toUpperCase().trim();
-    if (n.zona==='resto') myStats.resto++;
-    if (n.zona==='madrid') myStats.madrid++;
-    if (sit==='INSTALACIÓN'||sit==='INSTALACION') myStats.ventas++;
-    else if (sit==='NULO') myStats.nulos++;
-    else if (sit==='NULO RUTA') myStats.nulos_ruta++;
-    else if (sit==='BAJA') myStats.bajas++;
-    else if (sit==='EN RUTA'||sit==='RUTA MAÑANA') myStats.en_ruta++;
-    else myStats.pend++;
-  });
+  const myVentas = mesNotas.filter(n => {const s=(n.situacion||'').toUpperCase().trim(); return s==='INSTALACIÓN'||s==='INSTALACION';}).length;
 
   let html = '';
-  // Usar data.resumen para el resto pero stats propias calculadas
   data.resumen.forEach((r, i) => {
     if (r.notas === 0 && r.code !== myCode) return;
     const isSelf = r.code === myCode;
-    if (isSelf) {
-      html += summaryRowFull({...r, ...myStats, code: r.code, name: r.name}, i+1);
-    } else {
-      html += `<tr>
-        <td>${i+1}</td>
-        <td>${r.name}</td>
-        <td class="v-ventas">${r.ventas||'<span class="v-muted">—</span>'}</td>
-        <td><span class="v-muted">—</span></td><td><span class="v-muted">—</span></td>
-        <td><span class="v-muted">—</span></td><td><span class="v-muted">—</span></td>
-        <td><span class="v-muted">—</span></td><td><span class="v-muted">—</span></td>
-        <td><span class="v-muted">—</span></td><td><span class="v-muted">—</span></td>
-      </tr>`;
-    }
+    const ventas = isSelf ? myVentas : r.ventas;
+    html += `<tr style="${isSelf?'background:#E6F1FB':''}">
+      <td>${i+1}</td>
+      <td style="${isSelf?'font-weight:800':''}"><span class="${isSelf?'':''}}">${r.name}</span></td>
+      <td class="v-ventas">${ventas||'<span class="v-muted">—</span>'}</td>
+    </tr>`;
   });
   const t = data.totals;
   html += `<tr class="row-total">
     <td></td><td>TOTAL</td>
-    <td class="v-ventas">${t.ventas}</td><td colspan="8"></td>
+    <td class="v-ventas">${t.ventas}</td>
   </tr>`;
   body.innerHTML = html;
 }
