@@ -174,15 +174,21 @@ def api_tp_delete(code):
 @login_required
 def api_notas():
     mes = request.args.get('mes', '')
-    if not mes:
-        return jsonify({'error': 'mes requerido'}), 400
+    tp = request.args.get('tp', '')
     with get_db() as conn:
         with conn.cursor() as cur:
-            cur.execute('''SELECT n.*, t.name as tp_name FROM notas n
-                          LEFT JOIN tp_users t ON t.code = n.tp_code
-                          WHERE n.mes = %s ORDER BY n.fecha DESC, n.created_at DESC''', (mes,))
+            if tp:
+                # Todas las notas de una TP (para vista teleoperadora)
+                cur.execute('''SELECT n.*, t.name as tp_name FROM notas n
+                              LEFT JOIN tp_users t ON t.code = n.tp_code
+                              WHERE n.tp_code = %s ORDER BY n.fecha DESC, n.created_at DESC''', (tp,))
+            elif mes:
+                cur.execute('''SELECT n.*, t.name as tp_name FROM notas n
+                              LEFT JOIN tp_users t ON t.code = n.tp_code
+                              WHERE n.mes = %s ORDER BY n.fecha DESC, n.created_at DESC''', (mes,))
+            else:
+                return jsonify({'error': 'mes o tp requerido'}), 400
             rows = cur.fetchall()
-    # Convert dates
     for r in rows:
         if r.get('created_at'):
             r['created_at'] = str(r['created_at'])

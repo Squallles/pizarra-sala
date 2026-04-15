@@ -277,9 +277,9 @@ body{font-family:system-ui,sans-serif;font-size:14px;color:#1a1a1a;background:#d
           <div class="tp-filters">
             <div class="month-pills" id="tp-quick-months" style="margin-bottom:0"></div>
             <span class="filter-label">Fechas:</span>
-            <input type="date" id="tp-fecha-desde" onchange="filterTPNotas()">
+            <input type="date" id="tp-fecha-desde" onchange="tpSelectedMes='';renderTPQuickMonths();filterTPNotas()">
             <span class="filter-label">—</span>
-            <input type="date" id="tp-fecha-hasta" onchange="filterTPNotas()">
+            <input type="date" id="tp-fecha-hasta" onchange="tpSelectedMes='';renderTPQuickMonths();filterTPNotas()">
             <span class="filter-label">Estado:</span>
             <select id="tp-filtro-sit" onchange="filterTPNotas()" style="padding:6px 10px;border:1px solid #B5D4F4;border-radius:6px;font-size:12px;color:#0C447C;background:#fff">
               <option value="">Todos</option>
@@ -383,6 +383,8 @@ let currentUser = null;
 let currentMes = '';
 let allNotas = [];
 let allTPs = {};
+let tpAllNotas = []; // Todas las notas de la TP (sin filtro de mes)
+let tpSelectedMes = ''; // Mes seleccionado en vista TP (vacío = todos)
 
 const MESES_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
@@ -475,22 +477,36 @@ function renderMonthPills(meses) {
 
 function selectMonth(mes) {
   currentMes = mes;
-  document.querySelectorAll('.month-pill').forEach(p => p.classList.toggle('active', p.textContent === mesLabel(mes)));
+  document.querySelectorAll('#month-pills .month-pill, #month-pills-prov .month-pill').forEach(p => p.classList.toggle('active', p.textContent === mesLabel(mes)));
   loadMonth();
 }
 
 async function loadMonth() {
   if (!currentMes) return;
-  // Load notas + resumen in parallel
-  const [r1, r2] = await Promise.all([
-    fetch('/api/notas?mes='+currentMes, {credentials:'include'}),
-    fetch('/api/resumen?mes='+currentMes, {credentials:'include'})
-  ]);
-  allNotas = await r1.json();
-  const resumen = await r2.json();
-  renderSummary(resumen);
-  renderNotas();
-  loadProvincias();
+  const isMaster = currentUser && currentUser.is_master;
+
+  if (isMaster) {
+    const [r1, r2] = await Promise.all([
+      fetch('/api/notas?mes='+currentMes, {credentials:'include'}),
+      fetch('/api/resumen?mes='+currentMes, {credentials:'include'})
+    ]);
+    allNotas = await r1.json();
+    const resumen = await r2.json();
+    renderSummary(resumen);
+    renderNotas();
+    loadProvincias();
+  } else {
+    // TP: cargar resumen del mes + todas las notas de la TP
+    const [r1, r2] = await Promise.all([
+      fetch('/api/notas?tp='+currentUser.code, {credentials:'include'}),
+      fetch('/api/resumen?mes='+currentMes, {credentials:'include'})
+    ]);
+    tpAllNotas = await r1.json();
+    allNotas = tpAllNotas; // Para compatibilidad
+    const resumen = await r2.json();
+    renderSummary(resumen);
+    renderNotas();
+  }
 }
 
 // ── SUMMARY ──
@@ -641,25 +657,47 @@ function renderTPQuickMonths() {
   }
   const el = document.getElementById('tp-quick-months');
   el.innerHTML = months.map(m =>
-    `<button class="month-pill ${m===currentMes?'active':''}" onclick="selectMonth('${m}')">${mesLabel(m)}</button>`
+    `<button class="month-pill ${m===tpSelectedMes?'active':''}" onclick="toggleTPMonth('${m}')">${mesLabel(m)}</button>`
   ).join('');
+}
+
+function toggleTPMonth(mes) {
+  tpSelectedMes = tpSelectedMes === mes ? '' : mes;
+  // Limpiar filtros de fecha al seleccionar mes
+  if (tpSelectedMes) {
+    document.getElementById('tp-fecha-desde').value = '';
+    document.getElementById('tp-fecha-hasta').value = '';
+  }
+  renderTPQuickMonths();
+  filterTPNotas();
 }
 
 function filterTPNotas() {
   const desde = document.getElementById('tp-fecha-desde').value;
   const hasta = document.getElementById('tp-fecha-hasta').value;
   const filtroSit = (document.getElementById('tp-filtro-sit').value || '').toUpperCase();
-  // Solo notas de la TP actual
-  let notas = allNotas.filter(n => n.tp_code === currentUser.code);
-  if (desde) notas = notas.filter(n => n.fecha >= desde);
-  if (hasta) notas = notas.filter(n => n.fecha <= hasta);
-  if (filtroSit) {
-    if (filtroSit === 'PENDIENTE') {
-      notas = notas.filter(n => !n.situacion || n.situacion.trim() === '');
-    } else {
-      notas = notas.filter(n => (n.situacion||'').toUpperCase() === filtroSit || (filtroSit === 'INSTALACIÓN' && (n.situacion||'').toUpperCase() === 'INSTALACION'));
-    }
-  }
+
+  let notas = tpAllNotas.filter(n => n.tp_code === currentUser.code);
+
+  notas = notas.filter(n => {
+    const sit = (n.situacion||'').toUpperCase().trim();
+    const esPendiente = !sit || sit === '';
+
+    // PENDIENTE: siempre visible sin importar mes/fecha
+    if (esPendiente && (!filtroSit || filtroSit === 'PENDIENTE')) return true;
+    // Si filtro es PENDIENTE, solo mostrar pendientes
+    if (filtroSit === 'PENDIENTE') return esPendiente;
+
+    // Filtro de estado
+    if (filtroSit && sit !== filtroSit && !(filtroSit === 'INSTALACIÓN' && sit === 'INSTALACION')) return false;
+
+    // Filtro de mes o fechas
+    if (tpSelectedMes) return n.mes === tpSelectedMes;
+    if (desde && n.fecha < desde) return false;
+    if (hasta && n.fecha > hasta) return false;
+    return true;
+  });
+
   const ventas = notas.filter(n => {const s=(n.situacion||'').toUpperCase(); return s==='INSTALACIÓN'||s==='INSTALACION';}).length;
   document.getElementById('tp-ventas-count').textContent = ventas + ' ventas · ' + notas.length + ' notas';
   const el = document.getElementById('tp-notas-list');
