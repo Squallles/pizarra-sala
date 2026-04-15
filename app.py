@@ -437,7 +437,7 @@ def api_clean_duplicates():
     with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute('''DELETE FROM notas WHERE id NOT IN (
-                SELECT MIN(id) FROM notas
+                SELECT MAX(id) FROM notas
                 GROUP BY tp_code, fecha, telefono
             )''')
             deleted = cur.rowcount
