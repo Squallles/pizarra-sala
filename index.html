@@ -269,10 +269,7 @@ body{font-family:system-ui,sans-serif;font-size:14px;color:#1a1a1a;background:#d
         <div class="tp-ventas-wrap">
           <div class="tp-ventas-header">
             <div><h3>Mis Ventas</h3><span class="count" id="tp-ventas-count"></span></div>
-            <div style="display:flex;gap:6px">
-              <button class="btn-add" onclick="openNotaModal('resto')">+ Resto</button>
-              <button class="btn-add" onclick="openNotaModal('madrid')">+ Madrid</button>
-            </div>
+            <button class="btn-add" onclick="openNotaModal()">+ Nota</button>
           </div>
           <div class="tp-filters">
             <div class="month-pills" id="tp-quick-months" style="margin-bottom:0"></div>
@@ -332,11 +329,16 @@ body{font-family:system-ui,sans-serif;font-size:14px;color:#1a1a1a;background:#d
 <div class="modal-overlay" id="modal-nota">
   <div class="modal">
     <h3 id="modal-title">Nueva Nota</h3>
-    <input type="hidden" id="nota-zona">
     <input type="hidden" id="nota-edit-id">
     <div class="form-row">
       <div class="form-group"><label>Fecha</label><input type="date" id="nota-fecha"></div>
       <div class="form-group"><label>Telefono</label><input id="nota-tel" placeholder="912345678"></div>
+    </div>
+    <div class="form-group" id="zona-group" style="display:none"><label>Zona</label>
+      <select id="nota-zona" onchange="if(this.value==='madrid')document.getElementById('nota-prov').value='MADRID';else if(document.getElementById('nota-prov').value==='MADRID')document.getElementById('nota-prov').value=''">
+        <option value="resto">Resto de España</option>
+        <option value="madrid">Madrid</option>
+      </select>
     </div>
     <div class="form-row">
       <div class="form-group"><label>Localidad</label><input id="nota-loc" placeholder="Ciudad"></div>
@@ -737,16 +739,25 @@ function notaHTML(n) {
 
 // ── MODAL ──
 function openNotaModal(zona) {
-  document.getElementById('nota-zona').value = zona;
   document.getElementById('nota-edit-id').value = '';
-  document.getElementById('modal-title').textContent = 'Nueva Nota — ' + (zona === 'madrid' ? 'Madrid' : 'Resto de Espana');
-  // Default date to today
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('nota-fecha').value = today;
   document.getElementById('nota-tel').value = '';
   document.getElementById('nota-loc').value = '';
-  document.getElementById('nota-prov').value = zona === 'madrid' ? 'MADRID' : '';
   document.getElementById('nota-sit').value = '';
+  if (zona) {
+    // Master: zona fija
+    document.getElementById('nota-zona').value = zona;
+    document.getElementById('zona-group').style.display = 'none';
+    document.getElementById('modal-title').textContent = 'Nueva Nota — ' + (zona === 'madrid' ? 'Madrid' : 'Resto de España');
+    document.getElementById('nota-prov').value = zona === 'madrid' ? 'MADRID' : '';
+  } else {
+    // TP: elige zona
+    document.getElementById('nota-zona').value = 'resto';
+    document.getElementById('zona-group').style.display = '';
+    document.getElementById('modal-title').textContent = 'Nueva Nota';
+    document.getElementById('nota-prov').value = '';
+  }
   document.getElementById('modal-nota').classList.add('active');
 }
 
