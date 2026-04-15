@@ -464,7 +464,11 @@ async function loadData() {
   try {
     const r = await fetch('/api/meses', {credentials:'include'});
     const meses = await r.json();
-    if (!currentMes && meses.length) currentMes = meses[0];
+    if (!currentMes) {
+      const now = new Date();
+      const curMonth = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+      currentMes = meses.includes(curMonth) ? curMonth : (meses.length ? meses[0] : curMonth);
+    }
     renderMonthPills(meses);
   } catch(e) {}
 
