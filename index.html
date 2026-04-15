@@ -134,6 +134,16 @@ body{font-family:system-ui,sans-serif;font-size:14px;color:#1a1a1a;background:#d
 .ranking-name{font-weight:600;color:#0C447C}
 .ranking-empty{color:#85B7EB;font-size:12px;padding:20px;text-align:center}
 
+/* TP ventas unificadas */
+.tp-ventas-wrap{background:#fff;border:1px solid #B5D4F4;border-radius:10px;overflow:hidden;margin-bottom:20px}
+.tp-ventas-header{background:#0C447C;padding:10px 14px;display:flex;justify-content:space-between;align-items:center}
+.tp-ventas-header h3{color:#fff;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+.tp-ventas-header .count{color:#85B7EB;font-size:11px}
+.tp-filters{display:flex;align-items:center;gap:8px;padding:12px 14px;background:#f0f6ff;border-bottom:1px solid #E6F1FB;flex-wrap:wrap}
+.tp-filters input[type=date]{padding:6px 10px;border:1px solid #B5D4F4;border-radius:6px;font-size:12px;color:#0C447C;background:#fff}
+.tp-filters .filter-label{font-size:10px;font-weight:700;color:#85B7EB;text-transform:uppercase;letter-spacing:.05em}
+.tp-notas-list{max-height:500px;overflow-y:auto}
+
 /* Provincias */
 .prov-wrap{background:#fff;border:1px solid #B5D4F4;border-radius:10px;overflow:hidden;margin-bottom:20px}
 .prov-header{background:#0C447C;padding:8px 14px}
@@ -237,7 +247,8 @@ body{font-family:system-ui,sans-serif;font-size:14px;color:#1a1a1a;background:#d
           <div id="ranking-content"></div>
         </div>
       </div>
-      <div class="notas-grid">
+      <!-- Vista Master: notas Resto / Madrid separadas -->
+      <div class="notas-grid" id="notas-master" style="display:none">
         <div class="notas-section" id="section-resto">
           <div class="notas-header">
             <div><h3>Notas Resto de Espana</h3><span class="count" id="count-resto"></span></div>
@@ -251,6 +262,26 @@ body{font-family:system-ui,sans-serif;font-size:14px;color:#1a1a1a;background:#d
             <button class="btn-add" onclick="openNotaModal('madrid')">+ Nota</button>
           </div>
           <div class="notas-list" id="notas-madrid"></div>
+        </div>
+      </div>
+      <!-- Vista TP: notas unificadas (solo las suyas) -->
+      <div id="notas-tp-view" style="display:none">
+        <div class="tp-ventas-wrap">
+          <div class="tp-ventas-header">
+            <div><h3>Mis Ventas</h3><span class="count" id="tp-ventas-count"></span></div>
+            <div style="display:flex;gap:6px">
+              <button class="btn-add" onclick="openNotaModal('resto')">+ Resto</button>
+              <button class="btn-add" onclick="openNotaModal('madrid')">+ Madrid</button>
+            </div>
+          </div>
+          <div class="tp-filters">
+            <div class="month-pills" id="tp-quick-months" style="margin-bottom:0"></div>
+            <span class="filter-label">Entre fechas:</span>
+            <input type="date" id="tp-fecha-desde" onchange="filterTPNotas()">
+            <span class="filter-label">—</span>
+            <input type="date" id="tp-fecha-hasta" onchange="filterTPNotas()">
+          </div>
+          <div class="tp-notas-list" id="tp-notas-list"></div>
         </div>
       </div>
     </div>
@@ -389,11 +420,15 @@ function showApp() {
   document.getElementById('login-overlay').style.display = 'none';
   document.getElementById('app').style.display = 'grid';
   document.getElementById('user-name').textContent = currentUser.name;
-  document.getElementById('user-code').textContent = currentUser.code;
+  document.getElementById('user-code').textContent = currentUser.code || '';
+  const isMaster = currentUser.is_master;
   if (currentUser.is_admin) {
     document.getElementById('nav-admin').style.display = '';
     document.getElementById('admin-label').style.display = '';
   }
+  // Ocultar provincias y month-pills globales para TPs
+  document.getElementById('nav-provincias').style.display = isMaster ? '' : 'none';
+  document.getElementById('month-pills').style.display = isMaster ? '' : 'none';
   loadData();
 }
 
@@ -569,12 +604,47 @@ function fmtFecha(f) {
 }
 
 function renderNotas() {
-  const resto = allNotas.filter(n => n.zona === 'resto');
-  const madrid = allNotas.filter(n => n.zona === 'madrid');
-  document.getElementById('count-resto').textContent = resto.length + ' notas';
-  document.getElementById('count-madrid').textContent = madrid.length + ' notas';
-  document.getElementById('notas-resto').innerHTML = resto.length ? resto.map(notaHTML).join('') : '<div class="notas-empty">Sin notas</div>';
-  document.getElementById('notas-madrid').innerHTML = madrid.length ? madrid.map(notaHTML).join('') : '<div class="notas-empty">Sin notas</div>';
+  const isMaster = currentUser && currentUser.is_master;
+  document.getElementById('notas-master').style.display = isMaster ? '' : 'none';
+  document.getElementById('notas-tp-view').style.display = isMaster ? 'none' : '';
+
+  if (isMaster) {
+    const resto = allNotas.filter(n => n.zona === 'resto');
+    const madrid = allNotas.filter(n => n.zona === 'madrid');
+    document.getElementById('count-resto').textContent = resto.length + ' notas';
+    document.getElementById('count-madrid').textContent = madrid.length + ' notas';
+    document.getElementById('notas-resto').innerHTML = resto.length ? resto.map(notaHTML).join('') : '<div class="notas-empty">Sin notas</div>';
+    document.getElementById('notas-madrid').innerHTML = madrid.length ? madrid.map(notaHTML).join('') : '<div class="notas-empty">Sin notas</div>';
+  } else {
+    renderTPQuickMonths();
+    filterTPNotas();
+  }
+}
+
+function renderTPQuickMonths() {
+  const now = new Date();
+  const months = [];
+  for (let i = 0; i < 3; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push(d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'));
+  }
+  const el = document.getElementById('tp-quick-months');
+  el.innerHTML = months.map(m =>
+    `<button class="month-pill ${m===currentMes?'active':''}" onclick="selectMonth('${m}')">${mesLabel(m)}</button>`
+  ).join('');
+}
+
+function filterTPNotas() {
+  const desde = document.getElementById('tp-fecha-desde').value;
+  const hasta = document.getElementById('tp-fecha-hasta').value;
+  // Solo notas de la TP actual
+  let notas = allNotas.filter(n => n.tp_code === currentUser.code);
+  if (desde) notas = notas.filter(n => n.fecha >= desde);
+  if (hasta) notas = notas.filter(n => n.fecha <= hasta);
+  const ventas = notas.filter(n => {const s=(n.situacion||'').toUpperCase(); return s==='INSTALACIÓN'||s==='INSTALACION';}).length;
+  document.getElementById('tp-ventas-count').textContent = ventas + ' ventas · ' + notas.length + ' notas';
+  const el = document.getElementById('tp-notas-list');
+  el.innerHTML = notas.length ? notas.map(notaHTML).join('') : '<div class="notas-empty">Sin notas</div>';
 }
 
 function notaHTML(n) {
