@@ -289,7 +289,7 @@ body{font-family:system-ui,sans-serif;font-size:14px;color:#1a1a1a;background:#d
               <option value="NULO">NULO</option>
               <option value="NULO RUTA">NULO RUTA</option>
               <option value="BAJA">BAJA</option>
-              <option value="PENDIENTE">PENDIENTE</option>
+              <option value="PENDIENTE">SIN CONTACTAR</option>
             </select>
           </div>
           <div class="tp-notas-list" id="tp-notas-list"></div>
@@ -337,12 +337,7 @@ body{font-family:system-ui,sans-serif;font-size:14px;color:#1a1a1a;background:#d
       <div class="form-group"><label>Fecha</label><input type="date" id="nota-fecha"></div>
       <div class="form-group"><label>Telefono</label><input id="nota-tel" placeholder="912345678"></div>
     </div>
-    <div class="form-group" id="zona-group" style="display:none"><label>Zona</label>
-      <select id="nota-zona" onchange="if(this.value==='madrid')document.getElementById('nota-prov').value='MADRID';else if(document.getElementById('nota-prov').value==='MADRID')document.getElementById('nota-prov').value=''">
-        <option value="resto">Resto de España</option>
-        <option value="madrid">Madrid</option>
-      </select>
-    </div>
+    <input type="hidden" id="nota-zona" value="resto">
     <div class="form-row">
       <div class="form-group"><label>Localidad</label><input id="nota-loc" placeholder="Ciudad"></div>
       <div class="form-group"><label>Provincia</label>
@@ -367,12 +362,12 @@ body{font-family:system-ui,sans-serif;font-size:14px;color:#1a1a1a;background:#d
     </div>
     <div class="form-group"><label>Situacion</label>
       <select id="nota-sit">
-        <option value="">— Pendiente —</option>
+        <option value="">Sin Contactar</option>
         <option value="INSTALACIÓN">INSTALACION</option>
-        <option value="NULO">NULO</option>
-        <option value="NULO RUTA">NULO RUTA</option>
         <option value="EN RUTA">EN RUTA</option>
         <option value="RUTA MAÑANA">RUTA MAÑANA</option>
+        <option value="NULO">NULO</option>
+        <option value="NULO RUTA">NULO RUTA</option>
         <option value="BAJA">BAJA</option>
       </select>
     </div>
@@ -627,7 +622,7 @@ function sitClass(sit) {
 }
 
 function sitLabel(sit) {
-  return (sit||'').toUpperCase() || 'PENDIENTE';
+  return (sit||'').toUpperCase() || 'SIN CONTACTAR';
 }
 
 function fmtFecha(f) {
@@ -736,15 +731,11 @@ function openNotaModal(zona) {
   document.getElementById('nota-loc').value = '';
   document.getElementById('nota-sit').value = '';
   if (zona) {
-    // Master: zona fija
     document.getElementById('nota-zona').value = zona;
-    document.getElementById('zona-group').style.display = 'none';
     document.getElementById('modal-title').textContent = 'Nueva Nota — ' + (zona === 'madrid' ? 'Madrid' : 'Resto de España');
     document.getElementById('nota-prov').value = zona === 'madrid' ? 'MADRID' : '';
   } else {
-    // TP: elige zona
-    document.getElementById('nota-zona').value = 'resto';
-    document.getElementById('zona-group').style.display = '';
+    document.getElementById('nota-zona').value = '';
     document.getElementById('modal-title').textContent = 'Nueva Nota';
     document.getElementById('nota-prov').value = '';
   }
@@ -756,14 +747,15 @@ function closeModal() {
 }
 
 async function saveNota() {
-  const zona = document.getElementById('nota-zona').value;
+  const prov = document.getElementById('nota-prov').value;
+  const zona = document.getElementById('nota-zona').value || (prov === 'MADRID' ? 'madrid' : 'resto');
   const data = {
     mes: currentMes,
     tp_code: currentUser.code,
     fecha: document.getElementById('nota-fecha').value,
     telefono: document.getElementById('nota-tel').value.trim(),
     localidad: document.getElementById('nota-loc').value.trim().toUpperCase(),
-    provincia: document.getElementById('nota-prov').value,
+    provincia: prov,
     zona: zona,
     situacion: document.getElementById('nota-sit').value
   };
